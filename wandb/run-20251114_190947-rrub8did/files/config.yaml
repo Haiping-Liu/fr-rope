@@ -1,0 +1,154 @@
+_wandb:
+    value:
+        cli_version: 0.22.3
+        e:
+            1j75br1y2u1qibdtpjd3urc9eiftgatw:
+                codePath: main.py
+                codePathLocal: main.py
+                cpu_count: 48
+                cpu_count_logical: 48
+                cudaVersion: "13.0"
+                disk:
+                    /:
+                        total: "16729894912"
+                        used: "9258668032"
+                email: liuhaipingwork@gmail.com
+                executable: /mnt/iusers01/fatpou01/compsci01/w29632hl/.conda/envs/higest/bin/python
+                gpu: NVIDIA L40S
+                gpu_count: 2
+                gpu_nvidia:
+                    - architecture: Ada
+                      cudaCores: 18176
+                      memoryTotal: "48305799168"
+                      name: NVIDIA L40S
+                      uuid: GPU-d58764cc-85df-b796-4248-85c4c30b2d5f
+                    - architecture: Ada
+                      cudaCores: 18176
+                      memoryTotal: "48305799168"
+                      name: NVIDIA L40S
+                      uuid: GPU-464f40f8-ff8e-8ad4-4392-d6389e967a17
+                host: node879.csf3.man.alces.network
+                memory:
+                    total: "539987517440"
+                os: Linux-5.14.0-570.37.1.el9_6.x86_64-x86_64-with-glibc2.34
+                program: /net/scratch/w29632hl/code/rope/fr-rope/main.py
+                python: CPython 3.10.19
+                root: /net/scratch/w29632hl/code/rope/fr-rope
+                slurm:
+                    cluster_name: csf3.man.alces.network
+                    conf: /etc/slurm/slurm.conf
+                    cpu_bind: quiet,mask_cpu:0x000000AAAAAA,0xAAAAAA000000
+                    cpu_bind_list: 0x000000AAAAAA,0xAAAAAA000000
+                    cpu_bind_type: 'mask_cpu:'
+                    cpu_bind_verbose: quiet
+                    cpus_on_node: "24"
+                    cpus_per_task: "12"
+                    gpus: "2"
+                    gpus_on_node: "2"
+                    gtids: 0,1
+                    job_account: gpu-free
+                    job_cpus_per_node: "24"
+                    job_end_time: "1763212786"
+                    job_gid: "10049"
+                    job_group: fatpou01
+                    job_id: "8794347"
+                    job_name: bash
+                    job_nodelist: node879
+                    job_num_nodes: "1"
+                    job_partition: gpuL
+                    job_qos: gpu-free
+                    job_start_time: "1763126386"
+                    job_uid: "731429"
+                    job_user: w29632hl
+                    jobid: "8794347"
+                    launch_node_ipaddr: 10.10.0.121
+                    localid: "0"
+                    nnodes: "1"
+                    nodeid: "0"
+                    nodelist: node879
+                    nprocs: "2"
+                    ntasks: "2"
+                    oom_kill_step: "0"
+                    prio_process: "0"
+                    procid: "0"
+                    pty_port: "39737"
+                    pty_win_col: "187"
+                    pty_win_row: "90"
+                    script_context: prolog_task
+                    srun_comm_host: 10.10.0.121
+                    srun_comm_port: "37955"
+                    step_gpus: 2,3
+                    step_id: "0"
+                    step_launcher_port: "37955"
+                    step_nodelist: node879
+                    step_num_nodes: "1"
+                    step_num_tasks: "2"
+                    step_tasks_per_node: "2"
+                    stepid: "0"
+                    submit_dir: /net/scratch/w29632hl/code/LM/HiGeST
+                    submit_host: login1.csf3.man.alces.network
+                    task_pid: "3362820"
+                    tasks_per_node: "2"
+                    time_format: '%d/%m/%y %H:%M'
+                    topology_addr: node879
+                    topology_addr_pattern: node
+                    tres_per_task: cpu=12
+                    umask: "0022"
+                startedAt: "2025-11-14T19:09:47.187385Z"
+                writerId: 1j75br1y2u1qibdtpjd3urc9eiftgatw
+        m: []
+        python_version: 3.10.19
+        t:
+            "1":
+                - 1
+                - 5
+                - 53
+            "2":
+                - 1
+                - 5
+                - 53
+            "3":
+                - 2
+                - 13
+                - 16
+                - 62
+            "4": 3.10.19
+            "5": 0.22.3
+            "12": 0.22.3
+            "13": linux-x86_64
+attn_drop:
+    value: 0.1
+data_dir:
+    value: Mouse_hypothalamic
+device:
+    value: cuda
+dim:
+    value: 128
+dropout:
+    value: 0.1
+epochs:
+    value: 100
+lr:
+    value: 0.001
+max_cells:
+    value: 2048
+n_layers:
+    value: 1
+num_heads:
+    value: 4
+num_workers:
+    value: 4
+rope_type:
+    value: axial
+run_name:
+    value: axial_dim128_layers1
+save_dir:
+    value: checkpoints
+target_sum:
+    value: 10000
+train_ratio:
+    value: 0.8
+wandb_project:
+    value: fr-rope
+weight_decay:
+    value: 0.0001

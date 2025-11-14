@@ -1,0 +1,24 @@
+Using device: cuda
+Found 5 slides in Mouse_hypothalamic
+Train: 4, Val: 1
+Gene dim: 155, Num classes: 8
+Parameters: 0.43M
+
+Epoch 1/100
+Training:   0%|                                                                                                                                                                                                                                                                                                                                                 | 0/4 [00:00<?, ?it/s]
+Traceback (most recent call last):
+  File "/net/scratch/w29632hl/code/rope/fr-rope/main.py", line 209, in <module>
+    main(args)
+  File "/net/scratch/w29632hl/code/rope/fr-rope/main.py", line 150, in main
+    train_loss, train_acc = train_epoch(model, train_loader, optimizer, criterion, device, args.rope_type)
+  File "/net/scratch/w29632hl/code/rope/fr-rope/main.py", line 31, in train_epoch
+    head_dim = zmodel.dim // model.encoder[0].attn.num_heads
+NameError: name 'zmodel' is not defined. Did you mean: 'model'?
+Traceback (most recent call last):
+  File "/net/scratch/w29632hl/code/rope/fr-rope/main.py", line 209, in <module>
+    main(args)
+  File "/net/scratch/w29632hl/code/rope/fr-rope/main.py", line 150, in main
+    train_loss, train_acc = train_epoch(model, train_loader, optimizer, criterion, device, args.rope_type)
+  File "/net/scratch/w29632hl/code/rope/fr-rope/main.py", line 31, in train_epoch
+    head_dim = zmodel.dim // model.encoder[0].attn.num_heads
+NameError: name 'zmodel' is not defined. Did you mean: 'model'?
