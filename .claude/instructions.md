@@ -41,3 +41,6 @@ FR-RoPE uses **3rd-order moments to determine coordinate frame orientation**:
 - Implementing 2-layer Transformer with classification head
 - Validating 3rd-order moment approach for frame alignment
 - Dataset construction with rotation augmentation
+
+## Git
+- Do not include any 'Claude Code' information in the Git commit like '   🤖 Generated with [Claude Code](https://claude.com/claude-code) Co-Authored-By: Claude <noreply@anthropic.com>'

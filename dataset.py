@@ -1,5 +1,6 @@
 import torch
 from torch.utils.data import Dataset
+from typing import Callable, Optional
 import os
 import json
 import scanpy as sc
@@ -13,11 +14,16 @@ class STDataset(Dataset):
                  split: str = 'train',
                  rotation_mode: str = 'fixed',
                  rotation_angle: int = 0,
-                 transform: Callable = None,
+                 transform: Optional[Callable] = None,
                  max_cells: int = 2048,
                  target_sum: float = 1e4):
         self.data_dir = data_dir
         self.split = split
+        self.transform = transform
+        self.max_cells = max_cells
+        self.target_sum = target_sum
+
+        self.slide_paths = self._load_split()
 
         self.rotation_mode = rotation_mode
         if rotation_mode == 'fixed':
@@ -27,16 +33,13 @@ class STDataset(Dataset):
         else:
             raise ValueError(f"Invalid rotation mode: {rotation_mode}")
 
-        self.transform = transform
-        self.max_cells = max_cells
-        self.target_sum = target_sum
-
-        self.slide_paths = self._load_split()
-
         if len(self.slide_paths) == 0:
             raise ValueError(f"No slides found for split '{split}' in {data_dir}")
 
-        print(f"Loaded {len(self.slide_paths)} slides for split='{split}', rotation={rotation_angle}°")
+        if rotation_mode == 'fixed':
+            print(f"Loaded {len(self.slide_paths)} slides for split='{split}', rotation_mode='{rotation_mode}', rotation_angle={rotation_angle}°")
+        else:
+            print(f"Loaded {len(self.slide_paths)} slides for split='{split}', rotation_mode='{rotation_mode}'")
 
     def _load_split(self):
         split_path = os.path.join(self.data_dir, 'split.json')
@@ -57,7 +60,7 @@ class STDataset(Dataset):
         slide_path = self.slide_paths[idx]
         adata = sc.read_h5ad(slide_path)
 
-        adata = self._preprocess(adata)
+        adata = self._preprocess(adata, idx)
         coords = adata.obsm['spatial']
 
         if hasattr(adata.X, 'toarray'):
@@ -78,7 +81,7 @@ class STDataset(Dataset):
 
         return coords, genes, ground_truth
 
-    def _preprocess(self, adata):
+    def _preprocess(self, adata, idx):
         adata = adata.copy()
 
         sc.pp.normalize_total(adata, target_sum=self.target_sum)
@@ -127,7 +130,8 @@ class STDataset(Dataset):
 
 
 if __name__ == "__main__":
-    dataset = STDataset(data_dir='Mouse_hypothalamic_processed', split='train', rotation_angle=0)
+    dataset = STDataset(data_dir='Mouse_hypothalamic_processed', split='train', 
+                       rotation_mode='fixed', rotation_angle=0)
     print(len(dataset))
     print(dataset[0][0].shape)
     print(dataset[0][1].shape)

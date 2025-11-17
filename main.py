@@ -112,21 +112,21 @@ def main(args):
     device = torch.device(args.device if torch.cuda.is_available() else 'cpu')
     print(f"Using device: {device}")
 
-    train_dataset = STDataset(data_dir=args.data_dir, split='train', rotation_angle=0,
+    train_dataset = STDataset(data_dir=args.data_dir, split='train', 
+                              rotation_mode=args.train_rotation_mode,
+                              rotation_angle=0,
                               max_cells=args.max_cells, target_sum=args.target_sum)
-    val_dataset = STDataset(data_dir=args.data_dir, split='val', rotation_angle=0,
-                            max_cells=args.max_cells, target_sum=args.target_sum)
 
     train_loader = DataLoader(train_dataset, batch_size=1, shuffle=True, num_workers=args.num_workers)
-    val_loader = DataLoader(val_dataset, batch_size=1, shuffle=False, num_workers=args.num_workers)
 
-    val_loaders_rot = {}
-    for angle in [90, 180, 270]:
-        val_ds_rot = STDataset(data_dir=args.data_dir, split='val', rotation_angle=angle,
-                               max_cells=args.max_cells, target_sum=args.target_sum)
-        val_loaders_rot[angle] = DataLoader(val_ds_rot, batch_size=1, shuffle=False, num_workers=args.num_workers)
+    val_loaders = {}
+    for angle in [0, 90, 180, 270]:
+        val_ds = STDataset(data_dir=args.data_dir, split='val',
+                           rotation_mode='fixed', rotation_angle=angle,
+                           max_cells=args.max_cells, target_sum=args.target_sum)
+        val_loaders[angle] = DataLoader(val_ds, batch_size=1, shuffle=False, num_workers=args.num_workers)
 
-    print(f"Train: {len(train_dataset)}, Val: {len(val_dataset)}")
+    print(f"Train: {len(train_dataset)}, Val: {len(val_loaders[0].dataset)}")
 
     sample_coords, sample_genes, sample_labels = train_dataset[0]
     gene_dim = sample_genes.shape[1]
@@ -157,40 +157,40 @@ def main(args):
         print(f"\nEpoch {epoch + 1}/{args.epochs}")
 
         train_loss, train_acc = train_epoch(model, train_loader, optimizer, criterion, device, args.rope_type)
-        val_loss, val_acc = evaluate(model, val_loader, criterion, device, args.rope_type)
 
         log_dict = {
             'epoch': epoch + 1,
             'train_loss': train_loss,
             'train_acc': train_acc,
-            'val_loss': val_loss,
-            'val_acc': val_acc,
-            'val_acc_0': val_acc,
             'lr': optimizer.param_groups[0]['lr']
         }
 
-        for angle, loader in val_loaders_rot.items():
-            _, val_acc_rot = evaluate(model, loader, criterion, device, args.rope_type)
-            log_dict[f'val_acc_{angle}'] = val_acc_rot
-            print(f"Val Acc {angle}°: {val_acc_rot:.4f}")
+        val_acc_0 = None
+        for angle, loader in val_loaders.items():
+            val_loss, val_acc = evaluate(model, loader, criterion, device, args.rope_type)
+            log_dict[f'val_loss_{angle}'] = val_loss
+            log_dict[f'val_acc_{angle}'] = val_acc
+            if angle == 0:
+                val_acc_0 = val_acc
+            print(f"Val Acc {angle}°: {val_acc:.4f}")
 
         scheduler.step()
         wandb.log(log_dict)
 
         print(f"Train Loss: {train_loss:.4f}, Train Acc: {train_acc:.4f}")
-        print(f"Val Loss: {val_loss:.4f}, Val Acc: {val_acc:.4f}")
+        print(f"Val Loss: {log_dict['val_loss_0']:.4f}, Val Acc: {val_acc_0:.4f}")
 
-        if val_acc > best_val_acc:
-            best_val_acc = val_acc
-            best_epoch = epoch + 1
+        # if val_acc_0 > best_val_acc:
+        #     best_val_acc = val_acc_0
+        #     best_epoch = epoch + 1
 
-            os.makedirs(args.save_dir, exist_ok=True)
-            checkpoint_path = os.path.join(args.save_dir, f'{args.run_name}_best.pth')
-            torch.save(model.state_dict(), checkpoint_path)
-            print(f"Saved best model: {checkpoint_path}")
+        #     os.makedirs(args.save_dir, exist_ok=True)
+        #     checkpoint_path = os.path.join(args.save_dir, f'{args.run_name}_best.pth')
+        #     torch.save(model.state_dict(), checkpoint_path)
+        #     print(f"Saved best model: {checkpoint_path}")
 
-            wandb.run.summary['best_val_acc'] = best_val_acc
-            wandb.run.summary['best_epoch'] = best_epoch
+        #     wandb.run.summary['best_val_acc'] = best_val_acc
+        #     wandb.run.summary['best_epoch'] = best_epoch
 
     print(f"\nBest Val Acc: {best_val_acc:.4f} at epoch {best_epoch}")
     wandb.finish()
@@ -206,8 +206,10 @@ if __name__ == "__main__":
     parser.add_argument('--n_layers', type=int, default=1)
     parser.add_argument('--dropout', type=float, default=0.1)
     parser.add_argument('--attn_drop', type=float, default=0.1)
-    parser.add_argument('--rope_type', type=str, default='mixed', choices=['axial', 'fr', 'mixed'])
-    parser.add_argument('--epochs', type=int, default=100)
+    parser.add_argument('--rope_type', type=str, default='axial', choices=['axial', 'fr', 'mixed'])
+    parser.add_argument('--train_rotation_mode', type=str, default='fixed', choices=['fixed', 'random'],
+                        help='Rotation mode for training data: fixed (no rotation, angle=0) or random (random angle per sample for data augmentation)')
+    parser.add_argument('--epochs', type=int, default=50)
     parser.add_argument('--lr', type=float, default=1e-3)
     parser.add_argument('--weight_decay', type=float, default=1e-4)
     parser.add_argument('--num_workers', type=int, default=4)
@@ -219,7 +221,8 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     if args.run_name is None:
-        args.run_name = f'{args.rope_type}_dim{args.dim}_layers{args.n_layers}'
+        rot_suffix = f'_rot{args.train_rotation_mode}' if args.train_rotation_mode == 'random' else ''
+        args.run_name = f'{args.rope_type}_dim{args.dim}_layers{args.n_layers}{rot_suffix}'
 
     main(args)
 
