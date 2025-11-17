@@ -9,7 +9,7 @@ from tqdm import tqdm
 
 from model import SpatialTransformer
 from dataset import STDataset
-from fr import compute_axial_rope, compute_fr_rope
+from fr import compute_axial_rope, compute_fr_rope, compute_mixed_rope
 
 
 def train_epoch(model, dataloader, optimizer, criterion, device, rope_type='axial'):
@@ -33,6 +33,8 @@ def train_epoch(model, dataloader, optimizer, criterion, device, rope_type='axia
             freqs_cis = compute_axial_rope(dim=head_dim, X=coords)
         elif rope_type == 'fr':
             freqs_cis = compute_fr_rope(dim=head_dim, X=coords)
+        elif rope_type == 'mixed':
+            freqs_cis = compute_mixed_rope(dim=head_dim, X=coords)
         else:
             raise ValueError(f"Unknown rope_type: {rope_type}")
 
@@ -80,6 +82,8 @@ def evaluate(model, dataloader, criterion, device, rope_type='axial'):
                 freqs_cis = compute_axial_rope(dim=head_dim, X=coords)
             elif rope_type == 'fr':
                 freqs_cis = compute_fr_rope(dim=head_dim, X=coords)
+            elif rope_type == 'mixed':
+                freqs_cis = compute_mixed_rope(dim=head_dim, X=coords)
             else:
                 raise ValueError(f"Unknown rope_type: {rope_type}")
 
@@ -108,18 +112,23 @@ def main(args):
     device = torch.device(args.device if torch.cuda.is_available() else 'cpu')
     print(f"Using device: {device}")
 
-    dataset = STDataset(data_dir=args.data_dir, max_cells=args.max_cells, target_sum=args.target_sum)
-
-    train_size = int(args.train_ratio * len(dataset))
-    val_size = len(dataset) - train_size
-    train_dataset, val_dataset = torch.utils.data.random_split(dataset, [train_size, val_size])
+    train_dataset = STDataset(data_dir=args.data_dir, split='train', rotation_angle=0,
+                              max_cells=args.max_cells, target_sum=args.target_sum)
+    val_dataset = STDataset(data_dir=args.data_dir, split='val', rotation_angle=0,
+                            max_cells=args.max_cells, target_sum=args.target_sum)
 
     train_loader = DataLoader(train_dataset, batch_size=1, shuffle=True, num_workers=args.num_workers)
     val_loader = DataLoader(val_dataset, batch_size=1, shuffle=False, num_workers=args.num_workers)
 
+    val_loaders_rot = {}
+    for angle in [90, 180, 270]:
+        val_ds_rot = STDataset(data_dir=args.data_dir, split='val', rotation_angle=angle,
+                               max_cells=args.max_cells, target_sum=args.target_sum)
+        val_loaders_rot[angle] = DataLoader(val_ds_rot, batch_size=1, shuffle=False, num_workers=args.num_workers)
+
     print(f"Train: {len(train_dataset)}, Val: {len(val_dataset)}")
 
-    sample_coords, sample_genes, sample_labels = dataset[0]
+    sample_coords, sample_genes, sample_labels = train_dataset[0]
     gene_dim = sample_genes.shape[1]
     num_classes = len(torch.unique(sample_labels))
     print(f"Gene dim: {gene_dim}, Num classes: {num_classes}")
@@ -150,16 +159,23 @@ def main(args):
         train_loss, train_acc = train_epoch(model, train_loader, optimizer, criterion, device, args.rope_type)
         val_loss, val_acc = evaluate(model, val_loader, criterion, device, args.rope_type)
 
-        scheduler.step()
-
-        wandb.log({
+        log_dict = {
             'epoch': epoch + 1,
             'train_loss': train_loss,
             'train_acc': train_acc,
             'val_loss': val_loss,
             'val_acc': val_acc,
+            'val_acc_0': val_acc,
             'lr': optimizer.param_groups[0]['lr']
-        })
+        }
+
+        for angle, loader in val_loaders_rot.items():
+            _, val_acc_rot = evaluate(model, loader, criterion, device, args.rope_type)
+            log_dict[f'val_acc_{angle}'] = val_acc_rot
+            print(f"Val Acc {angle}°: {val_acc_rot:.4f}")
+
+        scheduler.step()
+        wandb.log(log_dict)
 
         print(f"Train Loss: {train_loss:.4f}, Train Acc: {train_acc:.4f}")
         print(f"Val Loss: {val_loss:.4f}, Val Acc: {val_acc:.4f}")
@@ -182,16 +198,15 @@ def main(args):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument('--data_dir', type=str, default='Mouse_hypothalamic')
+    parser.add_argument('--data_dir', type=str, default='Mouse_hypothalamic_processed')
     parser.add_argument('--max_cells', type=int, default=2048)
     parser.add_argument('--target_sum', type=float, default=1e4)
-    parser.add_argument('--train_ratio', type=float, default=0.8)
     parser.add_argument('--dim', type=int, default=128)
     parser.add_argument('--num_heads', type=int, default=4)
     parser.add_argument('--n_layers', type=int, default=1)
     parser.add_argument('--dropout', type=float, default=0.1)
     parser.add_argument('--attn_drop', type=float, default=0.1)
-    parser.add_argument('--rope_type', type=str, default='axial', choices=['axial', 'fr'])
+    parser.add_argument('--rope_type', type=str, default='mixed', choices=['axial', 'fr', 'mixed'])
     parser.add_argument('--epochs', type=int, default=100)
     parser.add_argument('--lr', type=float, default=1e-3)
     parser.add_argument('--weight_decay', type=float, default=1e-4)
@@ -207,3 +222,6 @@ if __name__ == "__main__":
         args.run_name = f'{args.rope_type}_dim{args.dim}_layers{args.n_layers}'
 
     main(args)
+
+
+# export WANDB_API_KEY=4f24d6fe2e2084047b41fe95db536d9bd6c0f80c

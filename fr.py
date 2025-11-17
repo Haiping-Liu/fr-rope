@@ -3,6 +3,7 @@ import numpy as np
 import math
 from typing import Tuple
 
+
 def compute_pca_frame(X):
     if isinstance(X, torch.Tensor):
         X = X.cpu().numpy()
@@ -30,8 +31,9 @@ def compute_pca_frame(X):
 
 
 def compute_axial_rope(dim: int,
-                          X: torch.Tensor,
-                          theta: float = 100.0) -> torch.Tensor:
+                       X: torch.Tensor = None,
+                       theta: float = 100.0,
+                       ) -> torch.Tensor:
     N = X.shape[0]
     x_1, x_2 = X[:, 0], X[:, 1]
 
@@ -52,12 +54,26 @@ def compute_axial_rope(dim: int,
     return cis
 
 
-def compute_fr_rope(dim: int, X: torch.Tensor):
+def compute_fr_rope(dim: int, 
+                    X: torch.Tensor,    
+                    ) -> torch.Tensor:
     c, U = compute_pca_frame(X)
     c = torch.from_numpy(c).to(X.device)
     U = torch.from_numpy(U).to(X.device)
     X_pca = (X - c) @ U
     return compute_axial_rope(dim=dim, X=X_pca)
+
+
+def compute_mixed_rope(dim: int, 
+                    X: torch.Tensor,
+                    theta: float = 100.0,
+                    ) -> torch.Tensor:
+    assert dim % 8 == 0
+    half_dim = dim // 2
+    axial_cis = compute_axial_rope(dim=half_dim, X=X, theta=theta)
+    fr_cis = compute_fr_rope(dim=half_dim, X=X)
+    mixed_cis = torch.cat([axial_cis, fr_cis], dim=-1)
+    return mixed_cis
 
 
 def reshape_for_broadcast(freqs_cis: torch.Tensor, x: torch.Tensor):

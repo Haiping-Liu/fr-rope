@@ -1,35 +1,54 @@
 import torch
 from torch.utils.data import Dataset
-import glob
 import os
+import json
 import scanpy as sc
 import numpy as np
 import pandas as pd
 
 
-class Slide_paths:
-    def __init__(self, data_dir):
-        self.data_dir = data_dir
-        self.slide_paths = self.get_slide_paths()
-
-    def get_slide_paths(self):
-        return sorted(glob.glob(os.path.join(self.data_dir, '*.h5ad')))
-
-
 class STDataset(Dataset):
-    def __init__(self, data_dir, transform=None, max_cells=2048, target_sum=1e4):
+    def __init__(self, 
+                 data_dir: str,
+                 split: str = 'train',
+                 rotation_mode: str = 'fixed',
+                 rotation_angle: int = 0,
+                 transform: Callable = None,
+                 max_cells: int = 2048,
+                 target_sum: float = 1e4):
         self.data_dir = data_dir
+        self.split = split
+
+        self.rotation_mode = rotation_mode
+        if rotation_mode == 'fixed':
+            self.rotation_angle = rotation_angle
+        elif rotation_mode == 'random':
+            self.rotation_angles = np.random.randint(0, 360, size=len(self.slide_paths))
+        else:
+            raise ValueError(f"Invalid rotation mode: {rotation_mode}")
+
         self.transform = transform
         self.max_cells = max_cells
         self.target_sum = target_sum
 
-        slide_paths_obj = Slide_paths(data_dir)
-        self.slide_paths = slide_paths_obj.slide_paths
+        self.slide_paths = self._load_split()
 
         if len(self.slide_paths) == 0:
-            raise ValueError(f"No .h5ad files found in {data_dir}")
+            raise ValueError(f"No slides found for split '{split}' in {data_dir}")
 
-        print(f"Found {len(self.slide_paths)} slides in {data_dir}")
+        print(f"Loaded {len(self.slide_paths)} slides for split='{split}', rotation={rotation_angle}°")
+
+    def _load_split(self):
+        split_path = os.path.join(self.data_dir, 'split.json')
+
+        with open(split_path, 'r') as f:
+            split_dict = json.load(f)
+
+        if self.split not in split_dict:
+            raise ValueError(f"Split '{self.split}' not found in split.json")
+
+        filenames = split_dict[self.split]
+        return [os.path.join(self.data_dir, fname) for fname in filenames]
 
     def __len__(self):
         return len(self.slide_paths)
@@ -40,15 +59,15 @@ class STDataset(Dataset):
 
         adata = self._preprocess(adata)
         coords = adata.obsm['spatial']
+
         if hasattr(adata.X, 'toarray'):
             genes = adata.X.toarray()
         else:
             genes = adata.X
-        ground_truth = pd.Categorical(adata.obs['ground_truth']).codes.astype(np.int64)
 
+        ground_truth = pd.Categorical(adata.obs['ground_truth']).codes.astype(np.int64)
         n_cells = coords.shape[0]
 
-        # Sample cells if needed (only if > max_cells)
         if n_cells > self.max_cells:
             coords, genes, ground_truth = self._sample_cells(coords, genes, ground_truth, self.max_cells)
             n_cells = self.max_cells
@@ -61,23 +80,39 @@ class STDataset(Dataset):
 
     def _preprocess(self, adata):
         adata = adata.copy()
+
         sc.pp.normalize_total(adata, target_sum=self.target_sum)
         sc.pp.log1p(adata)
-        if 'spatial' not in adata.obsm:
-            raise ValueError(f"No spatial coordinates found in AnnData object")
-
         coords = adata.obsm['spatial'].copy()
 
-        # Min-max normalization to [0, 1] for each dimension
+        if self.rotation_mode == 'fixed':
+            coords = self._rotate_coords(coords, self.rotation_angle)
+        elif self.rotation_mode == 'random':
+            coords = self._rotate_coords(coords, self.rotation_angles[idx])
+        else:
+            raise ValueError(f"Invalid rotation mode: {self.rotation_mode}")
+
         for i in range(coords.shape[1]):
             col = coords[:, i]
             col_min, col_max = col.min(), col.max()
-            if col_max > col_min:  # Avoid division by zero
+            if col_max > col_min:
                 coords[:, i] = (col - col_min) / (col_max - col_min)
 
         adata.obsm['spatial'] = coords
 
         return adata
+
+    def _rotate_coords(self, coords, angle_deg):
+        theta = np.radians(angle_deg)
+        cos_theta = np.cos(theta)
+        sin_theta = np.sin(theta)
+
+        R = np.array([
+            [cos_theta, -sin_theta],
+            [sin_theta,  cos_theta]
+        ])
+
+        return coords @ R.T
 
     def _sample_cells(self, coords, genes, ground_truth, max_cells):
         n_cells = coords.shape[0]
@@ -87,11 +122,12 @@ class STDataset(Dataset):
             coords = coords[indices]
             genes = genes[indices]
             ground_truth = ground_truth[indices]
+
         return coords, genes, ground_truth
 
 
 if __name__ == "__main__":
-    dataset = STDataset(data_dir='Mouse_hypothalamic')
+    dataset = STDataset(data_dir='Mouse_hypothalamic_processed', split='train', rotation_angle=0)
     print(len(dataset))
     print(dataset[0][0].shape)
     print(dataset[0][1].shape)
